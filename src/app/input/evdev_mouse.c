@@ -135,7 +135,7 @@ static void* thread_fn(void *_) {
         // Si no hay dispositivos agarrados, intenta agarrar.
         if (s_fd_count == 0) {
             if (!s_running) break;
-            if (open_and_grab_mice() <= 0) {
+            if (open_and_grab_mice() <= 0) {s_fds
                 // Nada que agarrar: dormimos poco y reintentamos,
                 // pero chequeamos s_running para poder salir rápido.
                 for (int i = 0; i < 10 && s_running; ++i) SDL_Delay(20); // ~200ms
@@ -145,7 +145,7 @@ static void* thread_fn(void *_) {
 
         // Preparar poll
         for (int i = 0; i < s_fd_count; ++i) {
-            pfds[i].fd = s_devs[i].fd;
+            pfds[i].fd = s_fds[i];
             pfds[i].events = POLLIN;
             pfds[i].revents = 0;
         }
@@ -176,7 +176,7 @@ static void* thread_fn(void *_) {
             int dx = 0, dy = 0, wx = 0, wy = 0;
 
             // lee non-blocking en ráfaga; corta si nos piden parar
-            while (s_running && (rd = read(s_devs[i].fd, ev, sizeof(ev))) > 0) {
+             while ((rd = read(s_fds[i], ev, sizeof(ev))) > 0) {
                 int count = rd / (int)sizeof(struct input_event);
                 for (int k = 0; k < count; ++k) {
                     if (ev[k].type == EV_REL) {
