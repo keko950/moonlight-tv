@@ -128,53 +128,88 @@ static void* thread_fn(void *_) {
     (void)_;
     struct pollfd pfds[MAX_MICE];
 
+    // (Opcional) baja prioridad para no pelear con el compositor:
+    // setpriority(PRIO_PROCESS, 0, 10);
+
     while (s_running) {
+        // Si no hay dispositivos agarrados, intenta agarrar.
         if (s_fd_count == 0) {
+            if (!s_running) break;
             if (open_and_grab_mice() <= 0) {
-                // no active mouse wait a bit
-                SDL_Delay(250);
+                // Nada que agarrar: dormimos poco y reintentamos,
+                // pero chequeamos s_running para poder salir rápido.
+                for (int i = 0; i < 10 && s_running; ++i) SDL_Delay(20); // ~200ms
                 continue;
             }
         }
+
+        // Preparar poll
         for (int i = 0; i < s_fd_count; ++i) {
-            pfds[i].fd = s_fds[i];
+            pfds[i].fd = s_devs[i].fd;
             pfds[i].events = POLLIN;
             pfds[i].revents = 0;
         }
-        int pr = poll(pfds, s_fd_count, 50);
-        if (pr <= 0) continue;
 
-        for (int i = 0; i < s_fd_count; ++i) {
-            if (!(pfds[i].revents & POLLIN)) continue;
+        // Espera a eventos, pero sal si nos piden parar
+        int pr = poll(pfds, s_fd_count, 50);
+        if (!s_running) break;
+
+        if (pr <= 0) {
+            // Timeout o EINTR: cede CPU y sigue. Así recupera foreground rápido.
+            SDL_Delay(1);
+            continue;
+        }
+
+        // Procesar fds con datos
+        for (int i = 0; i < s_fd_count && s_running; ++i) {
+            if (!(pfds[i].revents & (POLLIN | POLLERR | POLLHUP))) continue;
+
+            if (pfds[i].revents & (POLLERR | POLLHUP)) {
+                // Dispositivo se cayó: suelta todo y reintenta
+                release_all();
+                break;
+            }
+
+            // Leer eventos
             struct input_event ev[32];
             ssize_t rd;
-            while ((rd = read(pfds[i].fd, ev, sizeof(ev))) > 0) {
-                int count = rd / sizeof(struct input_event);
-                int dx = 0, dy = 0, wx = 0, wy = 0;
+            int dx = 0, dy = 0, wx = 0, wy = 0;
+
+            // lee non-blocking en ráfaga; corta si nos piden parar
+            while (s_running && (rd = read(s_devs[i].fd, ev, sizeof(ev))) > 0) {
+                int count = rd / (int)sizeof(struct input_event);
                 for (int k = 0; k < count; ++k) {
                     if (ev[k].type == EV_REL) {
                         switch (ev[k].code) {
-                            case REL_X: dx += ev[k].value; break;
-                            case REL_Y: dy += ev[k].value; break;
-                            case REL_WHEEL: wy += ev[k].value; break;
+                            case REL_X:      dx += ev[k].value; break;
+                            case REL_Y:      dy += ev[k].value; break;
+                            case REL_WHEEL:  wy += ev[k].value; break;
                             case REL_HWHEEL: wx += ev[k].value; break;
                         }
                     } else if (ev[k].type == EV_KEY) {
                         uint8_t b = map_btn(ev[k].code);
                         if (b) push_button(b, ev[k].value ? 1 : 0);
-                    } else if (ev[k].type == EV_SYN && ev[k].code == SYN_REPORT) {
+                    }
+                    // (Si tienes soporte EV_ABS, maneja aquí ABS_X/ABS_Y acumulando
+                    // y convirtiendo a deltas respecto a last_x/last_y)
+                    else if (ev[k].type == EV_SYN && ev[k].code == SYN_REPORT) {
                         if (dx || dy) { push_motion(dx, dy); dx = dy = 0; }
                         if (wx || wy) { push_wheel(wx, wy); wx = wy = 0; }
                     }
                 }
             }
+
+            if (!s_running) break;
+
             if (rd < 0 && errno != EAGAIN && errno != EINTR) {
+                // Error real (disco, desconexión, permisos…): suelta todo
                 release_all();
                 break;
             }
         }
     }
 
+    // Al salir, asegurar liberación
     release_all();
     return NULL;
 }
