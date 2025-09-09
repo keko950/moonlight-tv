@@ -121,10 +121,9 @@ void app_input_deinit(app_input_t *input) {
 
 
 void app_set_mouse_grab(app_input_t *input, bool grab) {
-#ifdef TARGET_WEBOS
+
     if (grab) evdev_mouse_start();
     else      evdev_mouse_stop();
-#endif
 
     SDL_CaptureMouse(grab ? SDL_TRUE : SDL_FALSE);
 

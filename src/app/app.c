@@ -220,6 +220,7 @@ static int app_event_filter(void *userdata, SDL_Event *event) {
         }
         case SDL_QUIT: {
             app_request_exit();
+             app_set_mouse_grab(&app->input, false); 
             break;
         }
         case SDL_JOYDEVICEADDED:
