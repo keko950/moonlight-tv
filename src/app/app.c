@@ -144,6 +144,10 @@ static int app_event_filter(void *userdata, SDL_Event *event) {
             app_set_mouse_grab(&app->input, false);
             break;
         }
+        case SDL_APP_DIDENTERBACKGROUND: {         
+            app_set_mouse_grab(&app->input, false);
+            break;
+        }
         case SDL_APP_DIDENTERFOREGROUND: {
             lv_obj_invalidate(lv_scr_act());
             app_set_mouse_grab(&app->input, true);
@@ -160,6 +164,7 @@ static int app_event_filter(void *userdata, SDL_Event *event) {
                     if (app_configuration->fullscreen && app_ui_is_opened(&app->ui) && app->session != NULL) {
                         // Interrupt streaming because app will go to background
                         session_interrupt(app->session, false, STREAMING_INTERRUPT_BACKGROUND);
+                        app_set_mouse_grab(&app->input, false);
                     }
 #endif
                     app->focused = false;
@@ -173,6 +178,7 @@ static int app_event_filter(void *userdata, SDL_Event *event) {
                     commons_log_debug("SDL", "Window event SDL_WINDOWEVENT_HIDDEN");
                     if (app_configuration->fullscreen && app_ui_is_opened(&app->ui) && app->session != NULL) {
                         // Interrupt streaming because app will go to background
+                        app_set_mouse_grab(&app->input, false);
                         session_interrupt(app->session, false, STREAMING_INTERRUPT_BACKGROUND);
                     }
                     break;
