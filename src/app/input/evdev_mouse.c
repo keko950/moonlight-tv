@@ -135,14 +135,13 @@ static void* thread_fn(void *_) {
         // Si no hay dispositivos agarrados, intenta agarrar.
         if (s_fd_count == 0) {
             if (!s_running) break;
-            if (open_and_grab_mice() <= 0) {s_fds
+            if (open_and_grab_mice() <= 0) {
                 // Nada que agarrar: dormimos poco y reintentamos,
                 // pero chequeamos s_running para poder salir rápido.
                 for (int i = 0; i < 10 && s_running; ++i) SDL_Delay(20); // ~200ms
                 continue;
             }
         }
-
         // Preparar poll
         for (int i = 0; i < s_fd_count; ++i) {
             pfds[i].fd = s_fds[i];
